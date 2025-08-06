@@ -44,19 +44,48 @@ export function useProducts() {
   const fetchProducts = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
+      // First fetch products
+      const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select(`
-          *,
-          categories!products_category_id_fkey (
-            id,
-            name
-          )
-        `)
-        .order('created_at', { ascending: false })
+        .select('*')
+        .order('name', { ascending: true })
 
-      if (error) throw error
-      setProducts(data || [])
+      console.log('Products query result:', { productsData, productsError })
+      
+      if (productsError) {
+        console.error('Supabase products error details:', productsError)
+        throw productsError
+      }
+
+      // Then fetch categories if needed
+      if (productsData && productsData.length > 0) {
+        const categoryIds = Array.from(new Set(productsData.map(p => p.category_id).filter(Boolean)))
+        
+        if (categoryIds.length > 0) {
+          const { data: categoriesData, error: categoriesError } = await supabase
+            .from('categories')
+            .select('id, name')
+            .in('id', categoryIds)
+          
+          if (categoriesError) {
+            console.error('Error fetching categories:', categoriesError)
+            // Continue without categories
+            setProducts(productsData || [])
+          } else {
+            // Map categories to products
+            const categoriesMap = new Map(categoriesData?.map(c => [c.id, c]) || [])
+            const productsWithCategories = productsData.map(product => ({
+              ...product,
+              categories: product.category_id ? categoriesMap.get(product.category_id) : undefined
+            }))
+            setProducts(productsWithCategories)
+          }
+        } else {
+          setProducts(productsData || [])
+        }
+      } else {
+        setProducts(productsData || [])
+      }
     } catch (err) {
       console.error('Error fetching products:', err)
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -358,3 +387,4 @@ export function useDashboardStats() {
 
   return { stats, loading, error, refetch: fetchStats }
 }
+

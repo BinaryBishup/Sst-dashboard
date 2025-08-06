@@ -5,20 +5,15 @@ import { Sidebar } from "./sidebar"
 import { Header } from "./header"
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="bg-gray-50 min-h-screen">
       {/* Sidebar */}
-      <Sidebar 
-        isOpen={sidebarOpen} 
-        onClose={() => setSidebarOpen(false)} 
-      />
+      <Sidebar />
       
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden lg:ml-0">
-        <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+      <div className="lg:pl-72">
+        <Header />
+        <main className="px-4 py-6 lg:px-8 pb-20 lg:pb-6">
           {children}
         </main>
       </div>

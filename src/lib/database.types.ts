@@ -9,7 +9,83 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      // Products table (based on your actual schema)
+      // New simplified orders table
+      orders: {
+        Row: {
+          id: string
+          order_number: string
+          contact_name: string
+          contact_phone: string
+          user_id: string | null
+          items: Json // JSONB array of order items
+          total_amount: number
+          subtotal: number | null
+          tax_amount: number | null
+          delivery_fee: number | null
+          discount_amount: number | null
+          status: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled'
+          delivery_partner_id: string | null
+          delivery_notes: string | null
+          delivery_address: Json | null
+          special_instructions: string | null
+          created_at: string
+          updated_at: string
+          estimated_delivery_time: string | null
+          payment_method: string | null
+          payment_status: string | null
+          pos: boolean | null
+        }
+        Insert: {
+          id?: string
+          order_number: string
+          contact_name: string
+          contact_phone: string
+          user_id?: string | null
+          items: Json
+          total_amount: number
+          subtotal?: number | null
+          tax_amount?: number | null
+          delivery_fee?: number | null
+          discount_amount?: number | null
+          status?: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled'
+          delivery_partner_id?: string | null
+          delivery_notes?: string | null
+          delivery_address?: Json | null
+          special_instructions?: string | null
+          created_at?: string
+          updated_at?: string
+          estimated_delivery_time?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
+          pos?: boolean | null
+        }
+        Update: {
+          id?: string
+          order_number?: string
+          contact_name?: string
+          contact_phone?: string
+          user_id?: string | null
+          items?: Json
+          total_amount?: number
+          subtotal?: number | null
+          tax_amount?: number | null
+          delivery_fee?: number | null
+          discount_amount?: number | null
+          status?: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled'
+          delivery_partner_id?: string | null
+          delivery_notes?: string | null
+          delivery_address?: Json | null
+          special_instructions?: string | null
+          created_at?: string
+          updated_at?: string
+          estimated_delivery_time?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
+          pos?: boolean | null
+        }
+      }
+
+      // Products table (keeping the same for reference)
       products: {
         Row: {
           id: string
@@ -33,6 +109,13 @@ export interface Database {
           review_count: number | null
           attributes: Json | null
           message: boolean | null
+          product_type: string | null
+          combo_items: Json | null
+          item_type: string | null
+          online_ordering: boolean | null
+          require_image: boolean | null
+          require_name: boolean | null
+          barcode: string | null
         }
         Insert: {
           id?: string
@@ -56,6 +139,13 @@ export interface Database {
           review_count?: number | null
           attributes?: Json | null
           message?: boolean | null
+          product_type?: string | null
+          combo_items?: Json | null
+          item_type?: string | null
+          online_ordering?: boolean | null
+          require_image?: boolean | null
+          require_name?: boolean | null
+          barcode?: string | null
         }
         Update: {
           id?: string
@@ -79,10 +169,17 @@ export interface Database {
           review_count?: number | null
           attributes?: Json | null
           message?: boolean | null
+          product_type?: string | null
+          combo_items?: Json | null
+          item_type?: string | null
+          online_ordering?: boolean | null
+          require_image?: boolean | null
+          require_name?: boolean | null
+          barcode?: string | null
         }
       }
       
-      // Categories table (based on your actual schema)
+      // Categories table (keeping the same)
       categories: {
         Row: {
           id: string
@@ -119,7 +216,7 @@ export interface Database {
         }
       }
 
-      // Combos table (based on your actual schema)
+      // Combos table (keeping the same)
       combos: {
         Row: {
           id: string
@@ -165,7 +262,7 @@ export interface Database {
         }
       }
 
-      // Cart addons table (based on your actual schema)
+      // Cart addons table (keeping the same)
       cart_addons: {
         Row: {
           id: number
@@ -190,141 +287,7 @@ export interface Database {
         }
       }
       
-      // Orders table (matching actual schema)
-      orders: {
-        Row: {
-          id: string
-          user_id: string | null
-          order_number: string | null
-          total: number
-          subtotal: number | null
-          tax: number | null
-          delivery_fee: number | null
-          total_amount: number | null
-          reward_points_used: number | null
-          reward_discount: number | null
-          status: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled'
-          payment_method: string | null
-          payment_status: string | null
-          delivery_notes: string | null
-          delivery_address: Json | null
-          delivery_phone: string | null
-          assigned_partner_id: string | null
-          special_instructions: string | null
-          customer_charge_date: string | null
-          product_snapshot: Json | null
-          estimated_delivery_time: string | null
-          created_at: string | null
-          updated_at: string | null
-          addons: Json | null
-        }
-        Insert: {
-          id?: string
-          user_id?: string | null
-          order_number?: string | null
-          total: number
-          subtotal?: number | null
-          tax?: number | null
-          delivery_fee?: number | null
-          total_amount?: number | null
-          reward_points_used?: number | null
-          reward_discount?: number | null
-          status?: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled'
-          payment_method?: string | null
-          payment_status?: string | null
-          delivery_notes?: string | null
-          delivery_address?: Json | null
-          delivery_phone?: string | null
-          assigned_partner_id?: string | null
-          special_instructions?: string | null
-          customer_charge_date?: string | null
-          product_snapshot?: Json | null
-          estimated_delivery_time?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-          addons?: Json | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          order_number?: string | null
-          total?: number
-          subtotal?: number | null
-          tax?: number | null
-          delivery_fee?: number | null
-          total_amount?: number | null
-          reward_points_used?: number | null
-          reward_discount?: number | null
-          status?: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled'
-          payment_method?: string | null
-          payment_status?: string | null
-          delivery_notes?: string | null
-          delivery_address?: Json | null
-          delivery_phone?: string | null
-          assigned_partner_id?: string | null
-          special_instructions?: string | null
-          customer_charge_date?: string | null
-          product_snapshot?: Json | null
-          estimated_delivery_time?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-          addons?: Json | null
-        }
-      }
-
-      // Order items table
-      order_items: {
-        Row: {
-          id: string
-          order_id: string
-          quantity: number
-          price: number
-          special_instructions: string | null
-          created_at: string | null
-          custom_charge_data: Json | null
-          product_snapshot: Json | null
-          gift_wrap: boolean | null
-          addons: Json | null
-          product_id: string | null
-          item_type: string | null
-          combo_id: string | null
-          product_attributes: Json | null
-        }
-        Insert: {
-          id?: string
-          order_id: string
-          quantity: number
-          price: number
-          special_instructions?: string | null
-          created_at?: string | null
-          custom_charge_data?: Json | null
-          product_snapshot?: Json | null
-          gift_wrap?: boolean | null
-          addons?: Json | null
-          product_id?: string | null
-          item_type?: string | null
-          combo_id?: string | null
-          product_attributes?: Json | null
-        }
-        Update: {
-          id?: string
-          order_id?: string
-          quantity?: number
-          price?: number
-          special_instructions?: string | null
-          created_at?: string | null
-          custom_charge_data?: Json | null
-          product_snapshot?: Json | null
-          gift_wrap?: boolean | null
-          addons?: Json | null
-          product_id?: string | null
-          item_type?: string | null
-          combo_id?: string | null
-          product_attributes?: Json | null
-        }
-      }
-      
-      // Profiles table (matching actual database schema)
+      // Profiles table (keeping the same)
       profiles: {
         Row: {
           id: string
@@ -376,7 +339,7 @@ export interface Database {
         }
       }
       
-      // Delivery partners table (matching screenshot schema)
+      // Delivery partners table (keeping the same)
       delivery_partners: {
         Row: {
           id: string
@@ -428,7 +391,8 @@ export interface Database {
         }
       }
       
-      // Promo codes table (matching actual database schema)
+
+      // Promo codes table (keeping the same)
       promo_codes: {
         Row: {
           id: string
@@ -499,4 +463,24 @@ export interface Database {
       [_ in never]: never
     }
   }
+}
+
+// Helper types for the new JSONB item structure
+export interface OrderItem {
+  id: string
+  type: 'product' | 'combo' | 'addon'
+  name: string
+  image_url?: string
+  quantity: number
+  base_price: number
+  total_price: number
+  variations?: {
+    [key: string]: {
+      name: string
+      price_adjustment: number
+    }
+  }
+  special_instructions?: string
+  is_gift_wrapped?: boolean
+  combo_items?: OrderItem[]
 }

@@ -10,10 +10,26 @@ export async function GET(
       throw new Error('Supabase admin client not available')
     }
 
-    // Get order details
+    // Get order details from the new simplified table
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        profiles:user_id (
+          id,
+          full_name,
+          phone,
+          email,
+          avatar_url
+        ),
+        delivery_partners:delivery_partner_id (
+          id,
+          name,
+          phone,
+          vehicle_type,
+          is_available
+        )
+      `)
       .eq('id', params.id)
       .single()
 
@@ -22,92 +38,11 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch order' }, { status: 500 })
     }
 
-    // Get order items
-    const { data: orderItems, error: itemsError } = await supabaseAdmin
-      .from('order_items')
-      .select('*')
-      .eq('order_id', params.id)
-      .order('created_at', { ascending: true })
-
-    if (itemsError) {
-      console.error('Error fetching order items:', itemsError)
-      return NextResponse.json({ error: 'Failed to fetch order items' }, { status: 500 })
-    }
-
-    // Get product IDs and combo IDs to fetch details
-    const productIds = orderItems
-      ?.map(item => item.product_id)
-      .filter(Boolean)
-      .filter((value, index, self) => self.indexOf(value) === index) // unique IDs
-
-    const comboIds = orderItems
-      ?.map(item => item.combo_id)
-      .filter(Boolean)
-      .filter((value, index, self) => self.indexOf(value) === index) // unique IDs
-
-    // Fetch products if there are product IDs
-    let products: any[] = []
-    if (productIds && productIds.length > 0) {
-      const { data: productData } = await supabaseAdmin
-        .from('products')
-        .select('id, name, description, image_url, images')
-        .in('id', productIds)
-      
-      products = productData || []
-    }
-
-    // Fetch combos if there are combo IDs
-    let combos: any[] = []
-    if (comboIds && comboIds.length > 0) {
-      const { data: comboData } = await supabaseAdmin
-        .from('combos')
-        .select('id, name, description, image_url, images')
-        .in('id', comboIds)
-      
-      combos = comboData || []
-    }
-
-    // Map products and combos to order items
-    const enrichedOrderItems = orderItems?.map(item => ({
-      ...item,
-      product: products.find(p => p.id === item.product_id) || null,
-      combo: combos.find(c => c.id === item.combo_id) || null
-    })) || []
-
-    // Fetch related profile if user_id exists
-    let profile = null
-    if (order.user_id) {
-      const { data: profileData } = await supabaseAdmin
-        .from('profiles')
-        .select('id, full_name, phone, email, avatar_url')
-        .eq('id', order.user_id)
-        .single()
-      
-      profile = profileData
-    }
-
-    // Fetch delivery partner if assigned_partner_id exists
-    let deliveryPartner = null
-    if (order.assigned_partner_id) {
-      const { data: partnerData } = await supabaseAdmin
-        .from('delivery_partners')
-        .select('id, name, phone, vehicle_type, is_available')
-        .eq('id', order.assigned_partner_id)
-        .single()
-      
-      deliveryPartner = partnerData
-    }
-
-    // Combine order with related data
-    const orderWithRelations = {
-      ...order,
-      profiles: profile,
-      delivery_partners: deliveryPartner
-    }
-
+    // Since items are now stored as JSONB in the order itself,
+    // we don't need separate queries for order_items
     return NextResponse.json({
-      order: orderWithRelations,
-      items: enrichedOrderItems
+      order: order,
+      items: order.items || [] // Items are stored directly in the order
     })
   } catch (error) {
     console.error('Error in order GET:', error)
@@ -137,7 +72,23 @@ export async function PUT(
       .from('orders')
       .update(orderWithUpdates)
       .eq('id', params.id)
-      .select()
+      .select(`
+        *,
+        profiles:user_id (
+          id,
+          full_name,
+          phone,
+          email,
+          avatar_url
+        ),
+        delivery_partners:delivery_partner_id (
+          id,
+          name,
+          phone,
+          vehicle_type,
+          is_available
+        )
+      `)
       .single()
 
     if (error) {

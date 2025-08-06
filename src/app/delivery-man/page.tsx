@@ -117,77 +117,14 @@ export default function DeliveryManPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Delivery Staff</h2>
-            <p className="text-muted-foreground">
-              Manage your delivery personnel
-            </p>
-          </div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Delivery Staff</h1>
           <Button onClick={handleAdd}>
             <UserPlus className="mr-2 h-4 w-4" />
             Add Delivery Person
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Drivers
-              </CardTitle>
-              <Truck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{partners.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Total delivery partners
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Active Partners
-              </CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{activePartners}</div>
-              <p className="text-xs text-muted-foreground">
-                {partners.length > 0 ? Math.round((activePartners / partners.length) * 100) : 0}% of total partners
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Avg. Rating
-              </CardTitle>
-              <Star className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{avgRating}</div>
-              <p className="text-xs text-muted-foreground">
-                Based on {partners.length} partners
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Deliveries
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalDeliveries}</div>
-              <p className="text-xs text-muted-foreground">
-                All-time deliveries
-              </p>
-            </CardContent>
-          </Card>
-        </div>
 
         <Card>
           <CardHeader>
@@ -216,31 +153,28 @@ export default function DeliveryManPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Rating</TableHead>
-                  <TableHead>Deliveries</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden sm:table-cell">Contact</TableHead>
+                  <TableHead className="hidden md:table-cell">Vehicle & Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={4} className="text-center py-8">
                       Loading delivery partners...
                     </TableCell>
                   </TableRow>
                 ) : filteredPartners.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={4} className="text-center py-8">
                       No delivery partners found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredPartners.map((partner) => (
                     <TableRow key={partner.id}>
+                      {/* Name */}
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           {partner.avatar_url ? (
@@ -255,71 +189,63 @@ export default function DeliveryManPage() {
                             </div>
                           )}
                           <div>
-                            <div className="font-medium">{partner.name || 'No Name'}</div>
-                            <div className="text-sm text-muted-foreground">
-                              ID: {partner.id.slice(-8)}
+                            <div className="font-medium text-sm sm:text-base">{partner.name || 'No Name'}</div>
+                            <div className="text-xs sm:hidden text-muted-foreground">
+                              {partner.phone || 'No phone'}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+
+                      {/* Contact - hidden on mobile */}
+                      <TableCell className="hidden sm:table-cell">
                         <div className="space-y-1">
-                          {partner.email && (
-                            <div className="flex items-center text-sm">
-                              <Mail className="mr-1 h-3 w-3 text-muted-foreground" />
-                              {partner.email}
-                            </div>
-                          )}
                           {partner.phone && (
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <Phone className="mr-1 h-3 w-3" />
+                            <div className="flex items-center text-sm">
+                              <Phone className="mr-1 h-3 w-3 text-muted-foreground" />
                               {partner.phone}
                             </div>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <MapPin className="mr-1 h-3 w-3 text-muted-foreground" />
-                          {partner.current_location || 'Not specified'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <Truck className="w-3 h-3 text-muted-foreground" />
-                          <span className="capitalize">{partner.vehicle_type || 'N/A'}</span>
-                          {partner.vehicle_number && (
-                            <span className="text-xs text-muted-foreground">
-                              ({partner.vehicle_number})
-                            </span>
+                          {partner.email && (
+                            <div className="flex items-center text-xs text-muted-foreground">
+                              <Mail className="mr-1 h-3 w-3" />
+                              {partner.email}
+                            </div>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Star className="mr-1 h-4 w-4 text-yellow-500 fill-yellow-500" />
-                          <span className="font-medium">{partner.rating || '0.0'}</span>
+
+                      {/* Vehicle & Status - hidden on small screens */}
+                      <TableCell className="hidden md:table-cell">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-1">
+                            <Truck className="w-3 h-3 text-muted-foreground" />
+                            <span className="capitalize text-sm">{partner.vehicle_type || 'N/A'}</span>
+                          </div>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[getPartnerStatus(partner) as keyof typeof statusStyles]}`}>
+                            {getPartnerStatus(partner)}
+                          </span>
                         </div>
                       </TableCell>
-                      <TableCell>{partner.total_deliveries || 0}</TableCell>
+
+                      {/* Actions */}
                       <TableCell>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[getPartnerStatus(partner) as keyof typeof statusStyles]}`}>
-                          {getPartnerStatus(partner)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-1">
+                        <div className="flex space-x-1 justify-end">
                           <Button 
                             variant="ghost" 
                             size="icon"
+                            className="h-8 w-8"
                             onClick={() => handleEdit(partner)}
+                            title="Edit"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="icon"
+                            className="h-8 w-8 text-red-600 hover:text-red-700"
                             onClick={() => handleDelete(partner.id)}
+                            title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

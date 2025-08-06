@@ -339,7 +339,7 @@ export const profilesService = {
   }
 }
 
-// Orders service
+// Orders service (updated for new simplified schema)
 export const ordersService = {
   async getAll(status?: string) {
     const url = status ? `/api/orders?status=${status}` : '/api/orders'
@@ -364,7 +364,7 @@ export const ordersService = {
     return await response.json()
   },
 
-  async create(order: Tables['orders']['Insert'] & { items?: any[] }) {
+  async create(order: Tables['orders']['Insert']) {
     const response = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -397,7 +397,7 @@ export const ordersService = {
   async assignDeliveryPartner(orderId: string, partnerId: string) {
     // Update order with assigned partner
     const orderUpdate = await this.update(orderId, {
-      assigned_partner_id: partnerId,
+      delivery_partner_id: partnerId,
       status: 'out_for_delivery'
     })
 

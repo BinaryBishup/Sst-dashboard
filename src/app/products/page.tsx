@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   Table,
   TableBody,
@@ -21,14 +23,27 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { 
   Plus,
   Search,
   Edit,
   Trash2,
-  MoreVertical,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Package2,
+  ShoppingBag,
+  Filter,
+  ChefHat,
+  Utensils,
+  Gift,
+  Settings
 } from "lucide-react"
 import { useProducts, useCategories } from "@/lib/hooks/useSupabaseData"
 import { ProductModal } from "@/components/modals/ProductModal"
@@ -53,14 +68,30 @@ const stockStyles = {
   "Available": "bg-blue-100 text-blue-800",
 }
 
+const productTypes = [
+  { value: 'product', label: 'Products', icon: ChefHat, emoji: '🍰' },
+  { value: 'combo', label: 'Combos', icon: Gift, emoji: '🎁' },
+  { value: 'addon', label: 'Add-ons', icon: Settings, emoji: '⚡' }
+]
+
 export default function ProductsPage() {
+  const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
+  const [selectedType, setSelectedType] = useState<string>("all")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingField, setEditingField] = useState<{id: string, field: string, value: string} | null>(null)
   const { products, loading, error, refetch } = useProducts()
   const { categories } = useCategories()
+
+  // Handle URL query parameters
+  useEffect(() => {
+    const typeParam = searchParams.get('type')
+    if (typeParam && ['product', 'combo', 'addon'].includes(typeParam)) {
+      setSelectedType(typeParam)
+    }
+  }, [searchParams])
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -70,8 +101,24 @@ export default function ProductsPage() {
       product.category_id === selectedCategory ||
       (product as any).categories?.id === selectedCategory
     
-    return matchesSearch && matchesCategory
+    const matchesType = selectedType === "all" || 
+      product.product_type === selectedType ||
+      (!product.product_type && selectedType === "product")
+    
+    return matchesSearch && matchesCategory && matchesType
   })
+
+  // Get counts for each type
+  const getTypeCounts = () => {
+    return {
+      all: products.length,
+      product: products.filter(p => !p.product_type || p.product_type === 'product').length,
+      combo: products.filter(p => p.product_type === 'combo').length,
+      addon: products.filter(p => p.product_type === 'addon').length
+    }
+  }
+
+  const typeCounts = getTypeCounts()
 
   const handleAddProduct = () => {
     setEditingProduct(null)
@@ -173,17 +220,48 @@ export default function ProductsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Products</h2>
-            <p className="text-muted-foreground">
-              Manage your restaurant menu items
-            </p>
-          </div>
-          <Button onClick={handleAddProduct}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Products</h1>
+          <Button onClick={handleAddProduct} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="mr-2 h-4 w-4" />
-            Add Product
+            Add Item
           </Button>
+        </div>
+
+        {/* Type Filter Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <Card 
+            className={`cursor-pointer transition-all hover:shadow-md ${selectedType === 'all' ? 'ring-2 ring-blue-500 bg-blue-50 shadow-md' : ''}`}
+            onClick={() => setSelectedType('all')}
+          >
+            <CardContent className="p-6 text-center">
+              <div className="text-3xl mb-2">📦</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{typeCounts.all}</div>
+              <div className="text-sm font-medium text-gray-600">All Items</div>
+            </CardContent>
+          </Card>
+          
+          {productTypes.map((type) => {
+            const Icon = type.icon
+            const count = typeCounts[type.value as keyof typeof typeCounts]
+            const isSelected = selectedType === type.value
+            return (
+              <Card 
+                key={type.value}
+                className={`cursor-pointer transition-all hover:shadow-md ${
+                  isSelected ? 'ring-2 ring-blue-500 bg-blue-50 shadow-md' : ''
+                }`}
+                onClick={() => setSelectedType(type.value)}
+              >
+                <CardContent className="p-6 text-center">
+                  <div className="text-3xl mb-2">{type.emoji}</div>
+                  <div className="text-2xl font-bold text-gray-900 mb-1">{count}</div>
+                  <div className="text-sm font-medium text-gray-600">{type.label}</div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
 
         <Card>
@@ -223,17 +301,23 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Product</TableHead>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Stock</TableHead>
-                  <TableHead>Stock Status</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead>Featured</TableHead>
+                  <TableHead>Online</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProducts.map((product) => {
                   const stockStatus = getStockStatus(product)
+                  const productType = product.product_type || 'product'
+                  const typeConfig = productTypes.find(t => t.value === productType)
+                  
                   return (
                     <TableRow key={product.id}>
                       <TableCell>
@@ -282,6 +366,17 @@ export default function ProductsPage() {
                           </div>
                         </div>
                       </TableCell>
+                      
+                      {/* Type Column */}
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-lg">{typeConfig?.emoji || '🍽️'}</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            {typeConfig?.label || 'Product'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      
                       <TableCell>{product.category || (product as any).categories?.name || "Uncategorized"}</TableCell>
                       
                       {/* Inline Price Editing */}
@@ -343,34 +438,54 @@ export default function ProductsPage() {
                         )}
                       </TableCell>
 
-                      {/* Stock Status with Quick Toggle */}
+                      {/* Active Toggle */}
                       <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${stockStyles[stockStatus as keyof typeof stockStyles]}`}>
-                            {stockStatus}
-                          </span>
-                          {product.stock_quantity !== null && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => toggleStock(product)}
-                              className="h-6 px-2 text-xs"
-                            >
-                              {product.stock_quantity === 0 ? 'Stock In' : 'Stock Out'}
-                            </Button>
-                          )}
-                        </div>
+                        <button
+                          onClick={() => updateProductField(product.id, 'is_active', !product.is_active)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                            product.is_active ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            product.is_active ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </TableCell>
+                      
+                      {/* Featured Toggle */}
+                      <TableCell>
+                        <button
+                          onClick={() => updateProductField(product.id, 'is_featured', !product.is_featured)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 ${
+                            product.is_featured ? 'bg-yellow-500' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            product.is_featured ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </TableCell>
+                      
+                      {/* Online Ordering Toggle */}
+                      <TableCell>
+                        <button
+                          onClick={() => updateProductField(product.id, 'online_ordering', !(product as any).online_ordering)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                            (product as any).online_ordering ? 'bg-green-600' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            (product as any).online_ordering ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEditProduct(product)}>
+                          <Button variant="ghost" size="sm" onClick={() => handleEditProduct(product)} className="h-8 w-8 p-0">
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteProduct(product)}>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(product)} className="h-8 w-8 p-0 text-red-600 hover:text-red-800">
                             <Trash2 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>

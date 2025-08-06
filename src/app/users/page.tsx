@@ -170,77 +170,14 @@ export default function UsersPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Users</h2>
-            <p className="text-muted-foreground">
-              Manage your customer base
-            </p>
-          </div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Users</h1>
           <Button disabled>
             <UserPlus className="mr-2 h-4 w-4" />
             Add User
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Users
-              </CardTitle>
-              <UsersIcon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalUsers}</div>
-              <p className="text-xs text-muted-foreground">
-                Total registered users
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Active Users
-              </CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{activeUsers}</div>
-              <p className="text-xs text-muted-foreground">
-                {totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0}% of total users
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                New This Month
-              </CardTitle>
-              <UserPlus className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{newThisMonth}</div>
-              <p className="text-xs text-muted-foreground">
-                Updated profiles this month
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Avg. Order Value
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(avgSpent)}</div>
-              <p className="text-xs text-muted-foreground">
-                Average user spending
-              </p>
-            </CardContent>
-          </Card>
-        </div>
 
         <Card>
           <CardHeader>
@@ -281,14 +218,11 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Total Spent</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="hidden sm:table-cell">Number</TableHead>
+                  <TableHead className="hidden md:table-cell">Total Spent</TableHead>
+                  <TableHead className="hidden md:table-cell">Status</TableHead>
                   <TableHead>Reward Points</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead>Last Update</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -296,9 +230,10 @@ export default function UsersPage() {
                   const status = getUserStatus(profile)
                   return (
                     <TableRow key={profile.id}>
+                      {/* Name */}
                       <TableCell>
                         <div className="flex items-center space-x-3">
-                          <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
                             {profile.avatar_url ? (
                               <img 
                                 src={profile.avatar_url} 
@@ -310,49 +245,55 @@ export default function UsersPage() {
                                 }}
                               />
                             ) : null}
-                            <div className="text-sm font-medium text-gray-600">
+                            <div className="text-xs sm:text-sm font-medium text-gray-600">
                               {getInitials(profile.full_name)}
                             </div>
                           </div>
                           <div>
-                            <div className="font-medium">{profile.full_name || "Unknown User"}</div>
-                            <div className="text-sm text-muted-foreground">
-                              ID: {profile.id.slice(-8)}
+                            <div className="font-medium text-sm sm:text-base">{profile.full_name || "Unknown User"}</div>
+                            <div className="text-xs sm:hidden text-muted-foreground">
+                              {profile.phone || "No phone"}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          {profile.email && (
-                            <div className="flex items-center text-sm">
-                              <Mail className="mr-1 h-3 w-3 text-muted-foreground" />
-                              {profile.email}
-                            </div>
-                          )}
-                          {profile.phone && (
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <Phone className="mr-1 h-3 w-3" />
-                              {profile.phone}
-                            </div>
-                          )}
-                          {!profile.email && !profile.phone && (
-                            <div className="text-sm text-gray-400">No contact info</div>
-                          )}
-                        </div>
+                      
+                      {/* Number - hidden on mobile */}
+                      <TableCell className="hidden sm:table-cell">
+                        {profile.phone ? (
+                          <div className="flex items-center text-sm">
+                            <Phone className="mr-1 h-3 w-3 text-muted-foreground" />
+                            {profile.phone}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-400">No phone</div>
+                        )}
                       </TableCell>
-                      <TableCell className="font-medium">
+
+                      {/* Total Spent - hidden on small screens */}
+                      <TableCell className="hidden md:table-cell font-medium">
                         {profile.total_spent ? formatCurrency(profile.total_spent) : "₹0"}
                       </TableCell>
+
+                      {/* Status - hidden on small screens */}
+                      <TableCell className="hidden md:table-cell">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status as keyof typeof statusStyles]}`}>
+                          {status}
+                        </span>
+                      </TableCell>
+
+                      {/* Reward Points with controls */}
                       <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Gift className="h-4 w-4 text-yellow-500" />
-                          <span className="font-medium">{profile.loyalty_points || 0}</span>
+                        <div className="flex items-center justify-between space-x-2">
+                          <div className="flex items-center space-x-1">
+                            <Gift className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />
+                            <span className="font-medium text-sm">{profile.loyalty_points || 0}</span>
+                          </div>
                           <div className="flex space-x-1">
                             <Button 
                               variant="ghost" 
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-6 w-6 sm:h-8 sm:w-8"
                               onClick={() => handleRewardPoints(profile, "add")}
                               title="Add reward points"
                             >
@@ -361,32 +302,13 @@ export default function UsersPage() {
                             <Button 
                               variant="ghost" 
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-6 w-6 sm:h-8 sm:w-8"
                               onClick={() => handleRewardPoints(profile, "subtract")}
                               title="Subtract reward points"
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatDate(profile.updated_at)}</TableCell>
-                      <TableCell>
-                        {profile.updated_at ? formatDate(profile.updated_at) : "Never"}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status as keyof typeof statusStyles]}`}>
-                          {status}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="icon" title="View Details">
-                            <User className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

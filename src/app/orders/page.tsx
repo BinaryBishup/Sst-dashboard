@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
   Clock,
   CheckCircle,
   ChefHat,
@@ -36,13 +50,22 @@ import {
   Printer,
   UserCheck,
   Loader2,
+  Bell,
+  AlertCircle,
+  ShoppingBag,
+  Car,
   Volume2,
-  VolumeX
+  VolumeX,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Calculator
 } from "lucide-react"
 import { ordersService, deliveryPartnersService, formatCurrency } from "@/lib/supabase-utils"
-import { Database } from "@/lib/database.types"
+import { Database, OrderItem } from "@/lib/database.types"
 import { useNewOrderNotification } from "@/hooks/useNewOrderNotification"
 
+// Updated Order type for new simplified schema
 type Order = Database['public']['Tables']['orders']['Row'] & {
   profiles?: {
     id: string
@@ -60,46 +83,115 @@ type Order = Database['public']['Tables']['orders']['Row'] & {
   }
 }
 
-type OrderItem = Database['public']['Tables']['order_items']['Row']
 type DeliveryPartner = Database['public']['Tables']['delivery_partners']['Row']
 
 const orderStatuses = [
-  { key: 'pending', label: 'Pending', icon: Clock, color: 'bg-yellow-100 text-yellow-800', cardColor: 'bg-yellow-50 border-yellow-200' },
-  { key: 'confirmed', label: 'Confirmed', icon: CheckCircle, color: 'bg-blue-100 text-blue-800', cardColor: 'bg-blue-50 border-blue-200' },
-  { key: 'preparing', label: 'Preparing', icon: ChefHat, color: 'bg-orange-100 text-orange-800', cardColor: 'bg-orange-50 border-orange-200' },
-  { key: 'out_for_delivery', label: 'Out for Delivery', icon: Truck, color: 'bg-purple-100 text-purple-800', cardColor: 'bg-purple-50 border-purple-200' },
-  { key: 'delivered', label: 'Delivered', icon: Package, color: 'bg-green-100 text-green-800', cardColor: 'bg-green-50 border-green-200' },
-  { key: 'cancelled', label: 'Cancelled', icon: XCircle, color: 'bg-red-100 text-red-800', cardColor: 'bg-red-50 border-red-200' }
+  { 
+    key: 'pending', 
+    label: 'Pending', 
+    icon: Clock, 
+    color: 'bg-yellow-100 text-yellow-800 border-yellow-200', 
+    cardColor: 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100',
+    count: 0 
+  },
+  { 
+    key: 'confirmed', 
+    label: 'Confirmed', 
+    icon: CheckCircle, 
+    color: 'bg-blue-100 text-blue-800 border-blue-200', 
+    cardColor: 'bg-blue-50 border-blue-200 hover:bg-blue-100',
+    count: 0 
+  },
+  { 
+    key: 'preparing', 
+    label: 'Preparing', 
+    icon: ChefHat, 
+    color: 'bg-orange-100 text-orange-800 border-orange-200', 
+    cardColor: 'bg-orange-50 border-orange-200 hover:bg-orange-100',
+    count: 0 
+  },
+  { 
+    key: 'out_for_delivery', 
+    label: 'Out for Delivery', 
+    icon: Truck, 
+    color: 'bg-purple-100 text-purple-800 border-purple-200', 
+    cardColor: 'bg-purple-50 border-purple-200 hover:bg-purple-100',
+    count: 0 
+  },
+  { 
+    key: 'delivered', 
+    label: 'Delivered', 
+    icon: Package, 
+    color: 'bg-green-100 text-green-800 border-green-200', 
+    cardColor: 'bg-green-50 border-green-200 hover:bg-green-100',
+    count: 0 
+  },
+  { 
+    key: 'cancelled', 
+    label: 'Cancelled', 
+    icon: XCircle, 
+    color: 'bg-red-100 text-red-800 border-red-200', 
+    cardColor: 'bg-red-50 border-red-200 hover:bg-red-100',
+    count: 0 
+  }
+]
+
+const deliveryInstructions = [
+  { key: 'avoid-ringing-bell', label: 'Avoid Ringing Bell', icon: Bell },
+  { key: 'leave-at-door', label: 'Leave At Door', icon: Package },
+  { key: 'avoid-calling', label: 'Avoid Calling', icon: Phone },
+  { key: 'leave-with-guard', label: 'Leave With Guard', icon: User }
 ]
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
+  const [orderTypeFilter, setOrderTypeFilter] = useState<string>('all') // 'all', 'pos', 'online'
   const [loading, setLoading] = useState(true)
-  const [orderLoading, setOrderLoading] = useState(false)
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>([])
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
+  const [isOrderDetailModalOpen, setIsOrderDetailModalOpen] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingOrders, setPendingOrders] = useState<Order[]>([])
   
-  // Use the new order notification hook
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const { isPlaying, stopNotification, manualPlay, hasPendingOrders } = useNewOrderNotification((orders) => {
     setPendingOrders(orders)
-    // Refresh orders list when pending orders change
-    if (selectedStatus === 'all' || selectedStatus === 'pending') {
-      fetchOrders(selectedStatus)
-    }
+    fetchOrders()
   })
 
-  const fetchOrders = async (status?: string) => {
+  // Keyboard navigation for modal
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isOrderDetailModalOpen || !selectedOrder) return
+
+      const currentIndex = filteredOrders.findIndex(o => o.id === selectedOrder.id)
+      
+      if (event.key === 'ArrowLeft' && currentIndex > 0) {
+        event.preventDefault()
+        setSelectedOrder(filteredOrders[currentIndex - 1])
+      } else if (event.key === 'ArrowRight' && currentIndex < filteredOrders.length - 1) {
+        event.preventDefault()
+        setSelectedOrder(filteredOrders[currentIndex + 1])
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOrderDetailModalOpen, selectedOrder, filteredOrders])
+
+  const fetchOrders = async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await ordersService.getAll(status === 'all' ? undefined : status)
+      const data = await ordersService.getAll()
       setOrders(data)
+      setFilteredOrders(data)
     } catch (error) {
       console.error('Error fetching orders:', error)
       setError('Failed to fetch orders. Please check the console for details.')
@@ -108,23 +200,9 @@ export default function OrdersPage() {
     }
   }
 
-  const fetchOrderDetails = async (orderId: string) => {
-    try {
-      setOrderLoading(true)
-      const { order, items } = await ordersService.getById(orderId)
-      setSelectedOrder(order)
-      setOrderItems(items)
-    } catch (error) {
-      console.error('Error fetching order details:', error)
-    } finally {
-      setOrderLoading(false)
-    }
-  }
-
   const fetchAvailablePartners = async () => {
     try {
       const partners = await deliveryPartnersService.getAll()
-      // Only show partners that are available AND active
       setDeliveryPartners(partners.filter((p: DeliveryPartner) => p.is_available && p.is_active))
     } catch (error) {
       console.error('Error fetching delivery partners:', error)
@@ -132,48 +210,65 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    fetchOrders(selectedStatus)
-  }, [selectedStatus])
+    fetchOrders()
+    fetchAvailablePartners()
+    
+    // Handle URL query parameters
+    const filter = searchParams.get('filter')
+    if (filter === 'pos') {
+      setOrderTypeFilter('pos')
+    }
+  }, [searchParams])
 
   useEffect(() => {
-    fetchAvailablePartners()
-  }, [])
+    let filtered = orders
+
+    // Filter by status
+    if (selectedStatus !== 'all') {
+      filtered = filtered.filter(order => order.status === selectedStatus)
+    }
+
+    // Filter by order type (POS vs Online)
+    if (orderTypeFilter === 'pos') {
+      filtered = filtered.filter(order => order.pos === true)
+    } else if (orderTypeFilter === 'online') {
+      filtered = filtered.filter(order => order.pos !== true)
+    }
+
+    setFilteredOrders(filtered)
+  }, [selectedStatus, orderTypeFilter, orders])
 
   const getStatusCounts = () => {
-    const counts = orderStatuses.reduce((acc, status) => {
-      acc[status.key] = orders.filter(order => order.status === status.key).length
-      return acc
-    }, {} as Record<string, number>)
-    counts.all = orders.length
+    const counts = orderStatuses.map(status => ({
+      ...status,
+      count: orders.filter(order => order.status === status.key).length
+    }))
     return counts
   }
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       await ordersService.update(orderId, { status: newStatus as any })
-      await fetchOrders(selectedStatus)
+      await fetchOrders()
+      
+      // Update selected order if it's the one being changed
       if (selectedOrder?.id === orderId) {
-        await fetchOrderDetails(orderId)
+        const updatedOrder = orders.find(o => o.id === orderId)
+        if (updatedOrder) {
+          setSelectedOrder(updatedOrder)
+        }
       }
       
-      // Check if we still have pending orders after this update
       if (newStatus === 'confirmed') {
-        // Fetch updated pending orders to check if notification should stop
-        const updatedOrders = await ordersService.getAll('pending')
-        if (!updatedOrders || updatedOrders.length === 0) {
+        const updatedOrders = await ordersService.getAll()
+        const pending = updatedOrders.filter((o: Order) => o.status === 'pending')
+        if (pending.length === 0) {
           stopNotification()
         }
       }
     } catch (error) {
       console.error('Error updating order status:', error)
       alert('Error updating order status')
-    }
-  }
-  
-  const confirmAllPendingOrders = async () => {
-    // Confirm all pending orders
-    for (const order of pendingOrders) {
-      await handleStatusChange(order.id, 'confirmed')
     }
   }
 
@@ -183,10 +278,15 @@ export default function OrdersPage() {
     try {
       setAssigning(true)
       await ordersService.assignDeliveryPartner(selectedOrder.id, partnerId)
-      await fetchOrders(selectedStatus)
-      await fetchOrderDetails(selectedOrder.id)
+      await fetchOrders()
       await fetchAvailablePartners()
       setIsAssignModalOpen(false)
+      
+      // Update selected order
+      const updatedOrder = orders.find(o => o.id === selectedOrder.id)
+      if (updatedOrder) {
+        setSelectedOrder(updatedOrder)
+      }
     } catch (error) {
       console.error('Error assigning delivery partner:', error)
       alert('Error assigning delivery partner')
@@ -201,10 +301,15 @@ export default function OrdersPage() {
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
 
-    const invoiceHtml = generateInvoiceHtml(selectedOrder, orderItems)
+    const invoiceHtml = generateInvoiceHtml(selectedOrder)
     printWindow.document.write(invoiceHtml)
     printWindow.document.close()
     printWindow.print()
+  }
+
+  const openOrderDetails = (order: Order) => {
+    setSelectedOrder(order)
+    setIsOrderDetailModalOpen(true)
   }
 
   const statusCounts = getStatusCounts()
@@ -212,233 +317,367 @@ export default function OrdersPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Orders Management</h2>
-          <p className="text-muted-foreground">
-            Track and manage all orders in real-time
-          </p>
-        </div>
-
-        {/* Pending Orders Alert Banner */}
-        {hasPendingOrders && pendingOrders.length > 0 && (
-          <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 animate-pulse">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-yellow-400 rounded-full p-2 animate-bounce">
-                  <Clock className="h-6 w-6 text-yellow-900" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-yellow-900">
-                    {pendingOrders.length} Pending Order{pendingOrders.length > 1 ? 's' : ''}!
-                  </h3>
-                  <p className="text-yellow-800">
-                    {pendingOrders.map((order, idx) => (
-                      <span key={order.id}>
-                        #{order.order_number || order.id.slice(-8)}
-                        {idx < pendingOrders.length - 1 ? ', ' : ''}
-                      </span>
-                    ))}
-                  </p>
-                </div>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+          
+          {/* Pending Orders Alert */}
+          {hasPendingOrders && pendingOrders.length > 0 && (
+            <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-2 animate-pulse">
+              <div className="bg-yellow-400 rounded-full p-2 animate-bounce">
+                <Bell className="h-5 w-5 text-yellow-900" />
+              </div>
+              <div>
+                <span className="font-semibold text-yellow-900">
+                  {pendingOrders.length} New Order{pendingOrders.length > 1 ? 's' : ''}!
+                </span>
               </div>
               <div className="flex gap-2">
                 {isPlaying ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={stopNotification}
-                    className="border-yellow-600 text-yellow-900 hover:bg-yellow-100"
-                  >
-                    <VolumeX className="h-4 w-4 mr-1" />
-                    Mute Sound
+                  <Button size="sm" variant="outline" onClick={stopNotification}>
+                    <VolumeX className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={manualPlay}
-                    className="border-yellow-600 text-yellow-900 hover:bg-yellow-100"
-                  >
-                    <Volume2 className="h-4 w-4 mr-1" />
-                    Play Sound
+                  <Button size="sm" variant="outline" onClick={manualPlay}>
+                    <Volume2 className="h-4 w-4" />
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setSelectedStatus('pending')}
-                >
-                  View Pending Orders
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700"
-                  onClick={confirmAllPendingOrders}
-                >
-                  Confirm All
-                </Button>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Status Cards */}
-        <div className="grid gap-4 md:grid-cols-7">
+        {/* Status Filter Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card 
-            className={`cursor-pointer transition-all hover:shadow-md ${selectedStatus === 'all' ? 'ring-2 ring-primary' : ''}`}
+            className={`cursor-pointer transition-all ${selectedStatus === 'all' ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:shadow-md'}`}
             onClick={() => setSelectedStatus('all')}
           >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">All Orders</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statusCounts.all}</div>
+            <CardContent className="flex flex-col items-center justify-center p-4 text-center">
+              <ShoppingBag className="h-8 w-8 text-gray-600 mb-2" />
+              <div className="text-2xl font-bold">{orders.length}</div>
+              <div className="text-sm font-medium text-gray-600">All Orders</div>
             </CardContent>
           </Card>
-
-          {orderStatuses.map((status) => {
+          
+          {statusCounts.map((status) => {
             const Icon = status.icon
             return (
               <Card 
                 key={status.key}
-                className={`cursor-pointer transition-all hover:shadow-md border-2 ${
-                  selectedStatus === status.key ? 'ring-2 ring-primary' : ''
-                } ${status.cardColor}`}
+                className={`cursor-pointer transition-all ${
+                  selectedStatus === status.key 
+                    ? 'ring-2 ring-blue-500 ' + status.cardColor
+                    : status.cardColor
+                }`}
                 onClick={() => setSelectedStatus(status.key)}
               >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{status.label}</CardTitle>
-                  <Icon className={`h-4 w-4 ${status.color.split(' ')[1]}`} />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{statusCounts[status.key]}</div>
+                <CardContent className="flex flex-col items-center justify-center p-4 text-center">
+                  <Icon className="h-8 w-8 mb-2" />
+                  <div className="text-2xl font-bold">{status.count}</div>
+                  <div className="text-sm font-medium">{status.label}</div>
                 </CardContent>
               </Card>
             )
           })}
         </div>
 
-        {/* Two Column Layout */}
-        <div className="grid gap-6 md:grid-cols-5">
-          {/* Orders List */}
-          <div className="md:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Orders List</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {loading ? (
-                  <div className="flex items-center justify-center p-8">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                  </div>
-                ) : orders.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    No orders found
-                  </div>
-                ) : (
-                  <div className="max-h-[600px] overflow-y-auto">
-                    {orders.map((order) => {
-                      const status = orderStatuses.find(s => s.key === order.status)
-                      const StatusIcon = status?.icon || Clock
-                      
-                      return (
-                        <div
-                          key={order.id}
-                          className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
-                            selectedOrder?.id === order.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                          }`}
-                          onClick={() => fetchOrderDetails(order.id)}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Hash className="h-3 w-3 text-muted-foreground" />
-                                <span className="font-medium text-sm">
-                                  {order.order_number || order.id.slice(-8)}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center gap-2 mb-2">
-                                <User className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-sm">
-                                  {order.profiles?.full_name || 'Unknown User'}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                <span className="font-semibold">
-                                  {formatCurrency(order.total)}
-                                </span>
-                                <Badge className={status?.color}>
-                                  <StatusIcon className="h-3 w-3 mr-1" />
-                                  {status?.label}
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="text-xs text-muted-foreground mt-2">
-                            {order.created_at && new Date(order.created_at).toLocaleString()}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        {/* Order Type Filter */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Filter by type:</span>
           </div>
-
-          {/* Order Details */}
-          <div className="md:col-span-3">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Order Details</CardTitle>
-                  {selectedOrder && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={printInvoice}
-                      >
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Invoice
-                      </Button>
-                      {(selectedOrder.status === 'confirmed' || selectedOrder.status === 'preparing') && !selectedOrder.assigned_partner_id && (
-                        <Button
-                          size="sm"
-                          onClick={() => setIsAssignModalOpen(true)}
-                        >
-                          <UserCheck className="h-4 w-4 mr-2" />
-                          Assign Partner
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {orderLoading ? (
-                  <div className="flex items-center justify-center p-8">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                  </div>
-                ) : !selectedOrder ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    Select an order to view details
-                  </div>
-                ) : (
-                  <OrderDetailsView 
-                    order={selectedOrder} 
-                    items={orderItems}
-                    onStatusChange={handleStatusChange}
-                  />
-                )}
-              </CardContent>
-            </Card>
+          <div className="flex gap-2">
+            <Button
+              variant={orderTypeFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setOrderTypeFilter('all')}
+            >
+              All Orders
+            </Button>
+            <Button
+              variant={orderTypeFilter === 'pos' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setOrderTypeFilter('pos')}
+              className="flex items-center gap-1"
+            >
+              <Calculator className="h-3 w-3" />
+              POS Orders
+            </Button>
+            <Button
+              variant={orderTypeFilter === 'online' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setOrderTypeFilter('online')}
+              className="flex items-center gap-1"
+            >
+              <ShoppingBag className="h-3 w-3" />
+              Online Orders
+            </Button>
+          </div>
+          <div className="ml-auto text-sm text-gray-500">
+            Showing {filteredOrders.length} of {orders.length} orders
           </div>
         </div>
+
+        {/* Orders Grid */}
+        {loading ? (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="text-center p-8 text-muted-foreground">
+            <ShoppingBag className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+            <p className="text-lg">No orders found</p>
+            <p className="text-sm">Orders will appear here when customers place them</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredOrders.map((order) => {
+              const status = orderStatuses.find(s => s.key === order.status)
+              const StatusIcon = status?.icon || Clock
+              
+              return (
+                <Card 
+                  key={order.id} 
+                  className="cursor-pointer hover:shadow-lg transition-all duration-200 border-l-4"
+                  style={{ borderLeftColor: status?.key === 'pending' ? '#f59e0b' : status?.key === 'delivered' ? '#10b981' : '#6b7280' }}
+                  onClick={() => openOrderDetails(order)}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Hash className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-semibold">
+                          {order.order_number}
+                        </span>
+                        {order.pos && (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                            <Calculator className="h-3 w-3 mr-1" />
+                            POS
+                          </Badge>
+                        )}
+                      </div>
+                      <Badge className={status?.color}>
+                        <StatusIcon className="h-3 w-3 mr-1" />
+                        {status?.label}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="pt-0">
+                    <div className="space-y-3">
+                      {/* Customer Name */}
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{order.contact_name}</span>
+                      </div>
+                      
+                      {/* Order Total & Payment Status */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-lg font-bold">{formatCurrency(order.total_amount)}</span>
+                        </div>
+                        {order.payment_status && (
+                          <Badge className={
+                            order.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 
+                            order.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }>
+                            {order.payment_status}
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
+                        {/* Open Location */}
+                        {order.delivery_address && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const address = typeof order.delivery_address === 'string' 
+                                ? order.delivery_address 
+                                : (order.delivery_address as any).formatted || 'Delivery Address'
+                              window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank')
+                            }}
+                          >
+                            <MapPin className="h-3 w-3 mr-1" />
+                            Location
+                          </Button>
+                        )}
+                        
+                        {/* Quick Status Change */}
+                        <Select 
+                          value={order.status} 
+                          onValueChange={(value) => {
+                            handleStatusChange(order.id, value)
+                          }}
+                        >
+                          <SelectTrigger 
+                            className="flex-1 h-8"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {orderStatuses.map((status) => {
+                              const Icon = status.icon
+                              return (
+                                <SelectItem key={status.key} value={status.key}>
+                                  <div className="flex items-center gap-2">
+                                    <Icon className="h-3 w-3" />
+                                    {status.label}
+                                  </div>
+                                </SelectItem>
+                              )
+                            })}
+                          </SelectContent>
+                        </Select>
+                        
+                        {/* Assign Partner */}
+                        {(order.status === 'confirmed' || order.status === 'preparing') && !order.delivery_partner_id && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedOrder(order)
+                              setIsAssignModalOpen(true)
+                            }}
+                          >
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Assign
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {/* Delivery Partner */}
+                      {order.delivery_partners && (
+                        <div className="flex items-center gap-2 bg-green-50 px-2 py-1 rounded">
+                          <Car className="h-3 w-3 text-green-600" />
+                          <span className="text-xs text-green-800 font-medium">{order.delivery_partners.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Order Details Modal */}
+      <Dialog open={isOrderDetailModalOpen} onOpenChange={setIsOrderDetailModalOpen}>
+        <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                {/* Navigation Arrows */}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const currentIndex = filteredOrders.findIndex(o => o.id === selectedOrder?.id)
+                      if (currentIndex > 0) {
+                        setSelectedOrder(filteredOrders[currentIndex - 1])
+                      }
+                    }}
+                    disabled={!selectedOrder || filteredOrders.findIndex(o => o.id === selectedOrder.id) === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const currentIndex = filteredOrders.findIndex(o => o.id === selectedOrder?.id)
+                      if (currentIndex < filteredOrders.length - 1) {
+                        setSelectedOrder(filteredOrders[currentIndex + 1])
+                      }
+                    }}
+                    disabled={!selectedOrder || filteredOrders.findIndex(o => o.id === selectedOrder.id) === filteredOrders.length - 1}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <DialogTitle className="flex items-center gap-2">
+                  <Hash className="h-5 w-5" />
+                  Order #{selectedOrder?.order_number}
+                  {selectedOrder && (
+                    <span className="text-sm text-muted-foreground">
+                      ({filteredOrders.findIndex(o => o.id === selectedOrder.id) + 1} of {filteredOrders.length})
+                    </span>
+                  )}
+                </DialogTitle>
+              </div>
+              
+              {/* Action Buttons in Header */}
+              {selectedOrder && (
+                <div className="flex items-center gap-3">
+                  {/* Status Change */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Status:</span>
+                    <Select 
+                      value={selectedOrder.status} 
+                      onValueChange={(value) => handleStatusChange(selectedOrder.id, value)}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {orderStatuses.map((status) => {
+                          const Icon = status.icon
+                          return (
+                            <SelectItem key={status.key} value={status.key}>
+                              <div className="flex items-center gap-2">
+                                <Icon className="h-4 w-4" />
+                                {status.label}
+                              </div>
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Assign Partner Button */}
+                  {(selectedOrder.status === 'confirmed' || selectedOrder.status === 'preparing') && !selectedOrder.delivery_partner_id && (
+                    <Button onClick={() => setIsAssignModalOpen(true)} size="sm">
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Assign Partner
+                    </Button>
+                  )}
+
+                  {/* Print Button */}
+                  <Button variant="outline" onClick={printInvoice} size="sm">
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print
+                  </Button>
+                </div>
+              )}
+            </div>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto">
+            {selectedOrder && (
+              <OrderDetailsView 
+                order={selectedOrder}
+                onStatusChange={handleStatusChange}
+                onAssignPartner={() => setIsAssignModalOpen(true)}
+                onPrintInvoice={printInvoice}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign Delivery Partner Modal */}
       <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
@@ -487,463 +726,393 @@ export default function OrdersPage() {
 
 function OrderDetailsView({ 
   order, 
-  items, 
-  onStatusChange 
+  onStatusChange,
+  onAssignPartner,
+  onPrintInvoice
 }: { 
   order: Order
-  items: OrderItem[]
   onStatusChange: (orderId: string, status: string) => void
+  onAssignPartner: () => void
+  onPrintInvoice: () => void
 }) {
   const currentStatus = orderStatuses.find(s => s.key === order.status)
   const StatusIcon = currentStatus?.icon || Clock
+  const items = (order.items as unknown as OrderItem[]) || []
+
+  // Get delivery instruction icon
+  const matchingInstruction = deliveryInstructions.find(
+    instruction => order.special_instructions === instruction.key
+  )
 
   return (
-    <div className="space-y-6">
-      {/* Order Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Hash className="h-5 w-5 text-muted-foreground" />
-            <h3 className="text-xl font-semibold">
-              Order {order.order_number || order.id.slice(-8)}
-            </h3>
-          </div>
-          <Badge className={currentStatus?.color}>
-            <StatusIcon className="h-4 w-4 mr-1" />
-            {currentStatus?.label}
-          </Badge>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Left Column - Order Items */}
+      <div className="lg:col-span-2">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Order Items</h3>
+          <Button variant="outline" size="sm">Update</Button>
         </div>
         
-        <div className="text-right">
-          <div className="text-2xl font-bold">
-            {formatCurrency(order.total)}
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {order.created_at && new Date(order.created_at).toLocaleString()}
-          </div>
-        </div>
-      </div>
-
-      {/* Customer Info */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Customer Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span>{order.profiles?.full_name || 'Unknown User'}</span>
-            </div>
-            {order.profiles?.phone && (
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span>{order.profiles.phone}</span>
-              </div>
-            )}
-            {order.delivery_address && (
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
-                  <span className="text-sm">
-                    {typeof order.delivery_address === 'string' 
-                      ? order.delivery_address 
-                      : (order.delivery_address as any).formatted || JSON.stringify(order.delivery_address)}
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    const address = typeof order.delivery_address === 'string' 
-                      ? order.delivery_address 
-                      : (order.delivery_address as any).formatted || JSON.stringify(order.delivery_address)
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank')
-                  }}
-                >
-                  <MapPin className="h-4 w-4 mr-2" />
-                  Open in Google Maps
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Order Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Select 
-              value={order.status} 
-              onValueChange={(value) => onStatusChange(order.id, value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {orderStatuses.map((status) => {
-                  const Icon = status.icon
-                  return (
-                    <SelectItem key={status.key} value={status.key}>
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        {status.label}
-                      </div>
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Delivery Partner Info */}
-      {order.delivery_partners && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Assigned Delivery Partner</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="font-medium">{order.delivery_partners.name}</div>
-                <div className="text-sm text-muted-foreground">
-                  {order.delivery_partners.phone} • {order.delivery_partners.vehicle_type}
-                </div>
-              </div>
-              <Badge className={order.delivery_partners.is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                {order.delivery_partners.is_available ? 'Available' : 'Busy'}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Order Items */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Order Items</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {items.map((item: any) => {
-              let product = null
-              let customChargeData = null
-              let addonsData = null
-              let productAttributes = null
-              let combo = null
-              
-              try {
-                // Handle product_snapshot - it might be a string or already an object
-                if (typeof item.product_snapshot === 'string') {
-                  product = JSON.parse(item.product_snapshot)
-                } else if (item.product_snapshot) {
-                  product = item.product_snapshot
-                }
-                
-                // Handle custom_charge_data similarly
-                if (typeof item.custom_charge_data === 'string') {
-                  customChargeData = JSON.parse(item.custom_charge_data)
-                } else if (item.custom_charge_data) {
-                  customChargeData = item.custom_charge_data
-                }
-                
-                // Handle addons JSONB column
-                if (typeof item.addons === 'string') {
-                  addonsData = JSON.parse(item.addons)
-                } else if (item.addons) {
-                  addonsData = item.addons
-                }
-
-                // Handle product_attributes JSONB column
-                if (typeof item.product_attributes === 'string') {
-                  productAttributes = JSON.parse(item.product_attributes)
-                } else if (item.product_attributes) {
-                  productAttributes = item.product_attributes
-                }
-
-                // If item_type is combo, fetch combo details
-                if (item.item_type === 'combo' && item.combo_id) {
-                  // Note: You might want to fetch combo details from API
-                  combo = item.combo || null
-                }
-              } catch (e) {
-                console.error('Error parsing item data:', e, item)
-              }
-              
-              // Determine the display name based on item type
-              const isCombo = item.item_type === 'combo'
-              
-              // Use product from API if available, otherwise fallback to snapshot
-              const actualProduct = item.product || product
-              
-              // Extract product details from various possible structures
-              const productName = isCombo && combo 
-                               ? (combo.name || `Combo #${item.combo_id}`)
-                               : (actualProduct?.name || 
-                                 actualProduct?.product_name || 
-                                 product?.name ||
-                                 product?.product_name || 
-                                 customChargeData?.product?.name ||
-                                 customChargeData?.productName ||
-                                 'Unknown Product')
-              
-              const productImage = isCombo && combo
-                                 ? (combo.image_url || combo.images?.[0])
-                                 : (actualProduct?.image_url || 
-                                   actualProduct?.images?.[0] || 
-                                   product?.image_url ||
-                                   product?.images?.[0] || 
-                                   customChargeData?.product?.image_url)
-              
-              return (
-                <div key={item.id} className="flex gap-4 py-3 border-b last:border-b-0">
-                  {/* Product Image */}
-                  {productImage && (
-                    <img 
-                      src={productImage} 
-                      alt={productName}
-                      className="w-16 h-16 object-cover rounded-md"
-                    />
-                  )}
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{productName}</span>
-                      {/* Item Type Badge */}
-                      {isCombo && (
-                        <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-                          🎯 Combo
-                        </Badge>
+        {/* Items Table */}
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[250px]">Items</TableHead>
+                <TableHead className="text-center w-[100px]">Type</TableHead>
+                <TableHead className="text-center">Price</TableHead>
+                <TableHead className="text-center">Quantity</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item, idx) => (
+                <TableRow key={idx} className="h-auto">
+                  <TableCell className="py-3">
+                    <div className="flex items-center gap-3">
+                      {item.image_url && (
+                        <img 
+                          src={item.image_url} 
+                          alt={item.name}
+                          className="w-12 h-12 object-cover rounded border"
+                        />
                       )}
-                      {/* Gift Wrap Badge */}
-                      {item.gift_wrap === true && (
-                        <Badge className="bg-pink-100 text-pink-800 border-pink-200">
-                          🎁 Gift Wrap
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    {/* Show product type if not already shown */}
-                    {item.item_type && item.item_type !== 'product' && !isCombo && (
-                      <div className="text-xs text-muted-foreground">
-                        Type: {item.item_type}
-                      </div>
-                    )}
-
-                    {/* Show product attributes (size, flavor, toppings, etc.) */}
-                    {productAttributes && Object.keys(productAttributes).length > 0 && (
-                      <div className="bg-gray-50 rounded-md p-2 mt-2">
-                        <div className="text-xs font-semibold text-gray-700 mb-1">Customizations:</div>
-                        {Object.entries(productAttributes).map(([key, value]: [string, any]) => {
-                          if (Array.isArray(value) && value.length > 0) {
-                            return (
-                              <div key={key} className="text-xs text-gray-600 ml-2">
-                                <span className="font-medium capitalize">{key}:</span>
-                                {value.map((item: any, idx: number) => (
-                                  <span key={idx} className="ml-1">
-                                    {item.name}
-                                    {item.price_adjustment && item.price_adjustment > 0 && (
-                                      <span className="text-green-600"> (+{formatCurrency(item.price_adjustment)})</span>
-                                    )}
-                                    {item.price && (
-                                      <span className="text-green-600"> (+{formatCurrency(item.price)})</span>
-                                    )}
-                                    {idx < value.length - 1 && ', '}
-                                  </span>
-                                ))}
-                              </div>
-                            )
-                          } else if (typeof value === 'string' || typeof value === 'number') {
-                            return (
-                              <div key={key} className="text-xs text-gray-600 ml-2">
-                                <span className="font-medium capitalize">{key}:</span> {value}
-                              </div>
-                            )
-                          }
-                          return null
-                        })}
-                      </div>
-                    )}
-                    
-                    {/* Show message if it's a product with message */}
-                    {product?.message && customChargeData?.message && (
-                      <div className="bg-blue-50 rounded-md p-2 mt-2">
-                        <div className="text-sm text-blue-800 font-medium">
-                          💌 Message: "{customChargeData.message}"
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900">{item.name}</div>
+                        
+                        {/* Variations - Simplified */}
+                        {item.variations && Object.keys(item.variations).length > 0 && (
+                          <div className="text-sm text-gray-600 mt-1">
+                            {Object.entries(item.variations).map(([key, value], idx, arr) => (
+                              <span key={key}>
+                                <span className="capitalize">{key}:</span> <span className="font-medium">{value.name}</span>
+                                {value.price_adjustment > 0 && (
+                                  <span className="text-green-600"> (+{formatCurrency(value.price_adjustment)})</span>
+                                )}
+                                {idx < arr.length - 1 && ' • '}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Cake Name */}
+                        {item.special_instructions && (
+                          <div className="text-sm bg-yellow-50 text-yellow-800 px-2 py-1 rounded mt-1 inline-block">
+                            🍰 "{item.special_instructions}"
+                          </div>
+                        )}
+                        
+                        {/* Additional badges */}
+                        <div className="flex gap-1 mt-1">
+                          {item.is_gift_wrapped && (
+                            <span className="text-xs bg-pink-50 text-pink-700 px-2 py-1 rounded">🎁 Gift</span>
+                          )}
                         </div>
                       </div>
-                    )}
-                    
-                    {/* Show addons from new column */}
-                    {addonsData && Array.isArray(addonsData) && addonsData.length > 0 && (
-                      <div className="text-sm text-gray-600 mt-2">
-                        <span className="font-medium">Add-ons:</span>
-                        <div className="ml-4 text-xs space-y-1">
-                          {addonsData.map((addon: any, idx: number) => (
-                            <div key={idx}>
-                              • {addon.name || `Addon ID: ${addon}`} 
-                              {addon.quantity && addon.quantity > 1 ? ` (${addon.quantity}x)` : ''} 
-                              {addon.price && ` - ${formatCurrency(addon.price * (addon.quantity || 1))}`}
+                    </div>
+                  </TableCell>
+                  
+                  {/* Type Column with Combo Popover */}
+                  <TableCell className="text-center py-4">
+                    {item.type === 'combo' ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8">
+                            🎯 Combo
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[500px]">
+                          <div className="space-y-4">
+                            <div className="text-center">
+                              <h4 className="font-semibold text-lg text-gray-900">🎯 Combo Details</h4>
+                              <p className="text-sm text-gray-600">Items included in this combo</p>
                             </div>
-                          ))}
-                        </div>
-                      </div>
+                            <div className="border rounded-lg">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="font-semibold">Item Name</TableHead>
+                                    <TableHead className="text-center font-semibold">Quantity</TableHead>
+                                    <TableHead className="text-right font-semibold">Individual Price</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {item.combo_items?.map((comboItem, idx) => (
+                                    <TableRow key={idx}>
+                                      <TableCell>
+                                        <div className="font-medium text-gray-900">{comboItem.name}</div>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-medium">
+                                          ×{comboItem.quantity}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell className="text-right font-semibold">
+                                        {formatCurrency(comboItem.total_price)}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                            <div className="text-center pt-2 border-t">
+                              <span className="text-sm text-gray-600">
+                                Total items: <span className="font-semibold">{item.combo_items?.length || 0}</span>
+                              </span>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs capitalize">
+                        {item.type === 'product' ? '🍽️ Product' : 
+                         item.type === 'addon' ? '➕ Add-on' : 
+                         item.type || 'Product'}
+                      </Badge>
                     )}
-                    
-                    {/* Show addons from custom charge data if new column is empty */}
-                    {!addonsData && customChargeData?.addons && customChargeData.addons.length > 0 && (
-                      <div className="text-sm text-gray-600 mt-2">
-                        <span className="font-medium">Add-ons:</span>
-                        <div className="ml-4 text-xs">
-                          {customChargeData.addons.map((addon: any) => addon.name).join(', ')}
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="text-sm text-muted-foreground mt-2">
-                      Quantity: {item.quantity} × {formatCurrency(item.price)}
-                      {item.gift_wrap && (
-                        <span className="ml-2 text-pink-600 font-medium">
-                          • 🎁 Gift Wrapped
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Highlighted special instructions/notes */}
-                    {item.special_instructions && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-2 mt-2">
-                        <div className="text-sm font-medium text-yellow-900">
-                          📝 Special Instructions:
-                        </div>
-                        <div className="text-sm text-yellow-800 mt-1">
-                          {item.special_instructions}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  </TableCell>
                   
-                  <div className="text-right">
-                    <div className="font-semibold">
-                      {formatCurrency(item.quantity * item.price)}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                  <TableCell className="text-center py-3 font-medium">{formatCurrency(item.base_price)}</TableCell>
+                  <TableCell className="text-center py-3 font-medium">{item.quantity}</TableCell>
+                  <TableCell className="text-right py-3 font-semibold">{formatCurrency(item.total_price)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
           
-          {/* Order Summary */}
-          <div className="border-t pt-3 mt-3 space-y-2">
+          {/* Totals */}
+          <div className="border-t p-4 space-y-2">
             {order.subtotal && (
               <div className="flex justify-between text-sm">
                 <span>Subtotal:</span>
                 <span>{formatCurrency(order.subtotal)}</span>
               </div>
             )}
-            {order.tax && (
-              <div className="flex justify-between text-sm">
-                <span>Tax:</span>
-                <span>{formatCurrency(order.tax)}</span>
-              </div>
-            )}
             {order.delivery_fee && (
               <div className="flex justify-between text-sm">
-                <span>Delivery Fee:</span>
+                <span>Delivery fee:</span>
                 <span>{formatCurrency(order.delivery_fee)}</span>
               </div>
             )}
-            {order.reward_discount && (
-              <div className="flex justify-between text-sm text-green-600">
-                <span>Reward Discount:</span>
-                <span>-{formatCurrency(order.reward_discount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between font-semibold text-lg border-t pt-2">
+            <div className="flex justify-between font-bold text-lg">
               <span>Total:</span>
-              <span>{formatCurrency(order.total)}</span>
+              <span>{formatCurrency(order.total_amount)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg text-green-600">
+              <span>Amount paid:</span>
+              <span>{formatCurrency(order.total_amount)}</span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Order-level Special Instructions and Addons */}
-      {(order.special_instructions || (order.addons && Object.keys(order.addons).length > 0)) && (
+      {/* Right Column - Customer Info */}
+      <div className="space-y-4">
+        {/* Header */}
+        <div>
+          <h3 className="text-lg font-semibold">Customer</h3>
+        </div>
+        
+        {/* Customer Card */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Order Notes & Extras</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Order Special Instructions */}
-            {order.special_instructions && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-2 w-2 bg-amber-500 rounded-full animate-pulse"></div>
-                  <span className="font-semibold text-amber-900">Special Instructions</span>
-                </div>
-                <div className="text-amber-800 text-sm leading-relaxed">
-                  {order.special_instructions}
-                </div>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <User className="h-5 w-5 text-blue-600" />
               </div>
-            )}
-
-            {/* Order-level Addons */}
-            {order.addons && (() => {
-              let orderAddons = null
-              try {
-                orderAddons = typeof order.addons === 'string' 
-                  ? JSON.parse(order.addons) 
-                  : order.addons
-              } catch (e) {
-                console.error('Error parsing order addons:', e)
-              }
-              
-              if (orderAddons && Array.isArray(orderAddons) && orderAddons.length > 0) {
-                return (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                      <span className="font-semibold text-blue-900">Order Add-ons</span>
-                    </div>
-                    <div className="space-y-2">
-                      {orderAddons.map((addon: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between text-sm">
-                          <span className="text-blue-800">
-                            {addon.name || `Addon ID: ${addon}`}
-                            {addon.quantity && addon.quantity > 1 && (
-                              <span className="text-blue-600"> × {addon.quantity}</span>
-                            )}
-                          </span>
-                          {addon.price && (
-                            <span className="font-medium text-blue-900">
-                              {formatCurrency(addon.price * (addon.quantity || 1))}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              }
-              return null
-            })()}
+              <div>
+                <div className="font-medium">{order.contact_name}</div>
+                <div className="text-sm text-muted-foreground">{order.contact_phone}</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
-      )}
+
+        {/* Payment Info */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Payment Info</label>
+          <div className="space-y-1 text-sm">
+            {order.payment_method && (
+              <div className="flex justify-between">
+                <span>Method:</span>
+                <Badge variant="outline" className="capitalize">{order.payment_method}</Badge>
+              </div>
+            )}
+            {order.payment_status && (
+              <div className="flex justify-between">
+                <span>Status:</span>
+                <Badge className={
+                  order.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 
+                  order.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }>
+                  {order.payment_status}
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Delivery Address */}
+        {order.delivery_address && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">Delivery Address</label>
+              <Button variant="outline" size="sm">Edit</Button>
+            </div>
+            <div className="text-sm text-muted-foreground bg-gray-50 p-3 rounded">
+              {typeof order.delivery_address === 'string' 
+                ? order.delivery_address 
+                : (order.delivery_address as any).formatted || 'Delivery Address'}
+            </div>
+          </div>
+        )}
+
+        {/* Delivery Instructions Icon Only */}
+        {matchingInstruction && (
+          <div className="flex items-center justify-center p-4 bg-amber-50 rounded-lg">
+            <div className="flex flex-col items-center">
+              <matchingInstruction.icon className="h-8 w-8 text-amber-600 mb-2" />
+              <span className="text-sm font-medium text-amber-800">
+                {matchingInstruction.label}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Delivery Partner */}
+        {order.delivery_partners && (
+          <div>
+            <label className="text-sm font-medium mb-2 block">Assigned Partner</label>
+            <div className="bg-green-50 border border-green-200 rounded p-3">
+              <div className="flex items-center gap-2">
+                <Car className="h-4 w-4 text-green-600" />
+                <div>
+                  <div className="font-medium text-sm">{order.delivery_partners.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {order.delivery_partners.phone} • {order.delivery_partners.vehicle_type}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Amount Paid */}
+        <div className="bg-green-50 border border-green-200 rounded p-3">
+          <div className="text-sm font-medium mb-1">Amount paid</div>
+          <div className="text-2xl font-bold text-green-600">
+            {formatCurrency(order.total_amount)}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-function generateInvoiceHtml(order: Order, items: OrderItem[]): string {
-  // Thermal printer friendly format (typically 80mm width)
+function ItemDisplay({ item }: { item: OrderItem }) {
+  return (
+    <div className="flex gap-4 py-3 border-b last:border-b-0">
+      {item.image_url && (
+        <img 
+          src={item.image_url} 
+          alt={item.name}
+          className="w-16 h-16 object-cover rounded-md"
+        />
+      )}
+      
+      <div className="flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium">{item.name}</span>
+          
+          {/* Product Type Badge */}
+          {item.type && (
+            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+              {item.type === 'combo' && '🎯'}
+              {item.type === 'addon' && '➕'}
+              {item.type === 'product' && '🍽️'}
+              {item.type}
+            </Badge>
+          )}
+          
+          {/* Gift Wrap */}
+          {item.is_gift_wrapped && (
+            <Badge className="bg-pink-100 text-pink-800 border-pink-200">
+              🎁 Gift Wrap
+            </Badge>
+          )}
+        </div>
+
+        {/* Variations */}
+        {item.variations && Object.keys(item.variations).length > 0 && (
+          <div className="bg-gray-50 rounded-md p-2 mt-2">
+            <div className="text-xs font-semibold text-gray-700 mb-1">Customizations:</div>
+            {Object.entries(item.variations).map(([key, value]) => (
+              <div key={key} className="text-xs text-gray-600 ml-2">
+                <span className="font-medium capitalize">{key}:</span> {value.name}
+                {value.price_adjustment > 0 && (
+                  <span className="text-green-600"> (+{formatCurrency(value.price_adjustment)})</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        
+        <div className="text-sm text-muted-foreground mt-2">
+          Quantity: {item.quantity} × {formatCurrency(item.base_price)}
+          {item.is_gift_wrapped && (
+            <span className="ml-2 text-pink-600 font-medium">
+              • 🎁 Gift Wrapped
+            </span>
+          )}
+        </div>
+        
+        {item.special_instructions && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mt-2">
+            <div className="text-sm font-medium text-yellow-900 flex items-center gap-2">
+              🍰 Name on Cake:
+            </div>
+            <div className="text-lg font-semibold text-yellow-800 mt-1 bg-yellow-100 px-2 py-1 rounded">
+              "{item.special_instructions}"
+            </div>
+          </div>
+        )}
+
+        {/* Combo Items */}
+        {item.combo_items && Array.isArray(item.combo_items) && item.combo_items.length > 0 && (
+          <div className="bg-purple-50 border border-purple-200 rounded-md p-2 mt-2">
+            <div className="text-sm font-medium text-purple-900 mb-2">
+              🎯 Combo Items:
+            </div>
+            <div className="space-y-1">
+              {item.combo_items.map((comboItem, idx) => (
+                <div key={idx} className="text-xs text-purple-800 flex justify-between">
+                  <span>• {comboItem.name} ({comboItem.quantity}x)</span>
+                  <span>{formatCurrency(comboItem.total_price)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <div className="text-right">
+        <div className="font-semibold">
+          {formatCurrency(item.total_price)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function generateInvoiceHtml(order: Order): string {
+  const items = (order.items as unknown as OrderItem[]) || []
+  
   return `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Invoice - Order ${order.order_number || order.id.slice(-8)}</title>
+      <title>Invoice - Order ${order.order_number}</title>
       <style>
         @media print {
           @page { margin: 0; size: 80mm auto; }
@@ -1024,7 +1193,7 @@ function generateInvoiceHtml(order: Order, items: OrderItem[]): string {
       <div class="section">
         <div class="row">
           <span>Order #:</span>
-          <span>${order.order_number || order.id.slice(-8)}</span>
+          <span>${order.order_number}</span>
         </div>
         <div class="row">
           <span>Date:</span>
@@ -1041,8 +1210,8 @@ function generateInvoiceHtml(order: Order, items: OrderItem[]): string {
 
       <div class="section">
         <div style="font-weight: bold; margin-bottom: 5px;">Customer Details:</div>
-        <div>${order.profiles?.full_name || 'Walk-in Customer'}</div>
-        ${order.profiles?.phone ? `<div>Ph: ${order.profiles.phone}</div>` : ''}
+        <div>${order.contact_name}</div>
+        <div>Ph: ${order.contact_phone}</div>
         ${order.delivery_address ? `
           <div class="address">
             ${typeof order.delivery_address === 'string' 
@@ -1054,49 +1223,19 @@ function generateInvoiceHtml(order: Order, items: OrderItem[]): string {
 
       <div class="section">
         <div style="font-weight: bold; margin-bottom: 5px;">Order Items:</div>
-        ${items.map((item: any) => {
-          let product = null
-          let customData = null
-          let addonsData = null
-          try {
-            if (typeof item.product_snapshot === 'string') {
-              product = JSON.parse(item.product_snapshot)
-            } else if (item.product_snapshot) {
-              product = item.product_snapshot
-            }
-            if (typeof item.custom_charge_data === 'string') {
-              customData = JSON.parse(item.custom_charge_data)
-            } else if (item.custom_charge_data) {
-              customData = item.custom_charge_data
-            }
-            if (typeof item.addons === 'string') {
-              addonsData = JSON.parse(item.addons)
-            } else if (item.addons) {
-              addonsData = item.addons
-            }
-          } catch (e) {
-            console.error('Error parsing invoice item:', e)
-          }
-          
-          const actualProduct = item.product || product
-          const productName = actualProduct?.name || product?.name || product?.product_name || customData?.product?.name || 'Item'
-          
+        ${items.map((item) => {
           return `
             <div class="item-row">
-              <div class="item-name">${productName}</div>
-              ${item.gift_wrap ? `<div class="item-details">🎁 Gift Wrapped</div>` : ''}
-              ${customData?.message ? `<div class="item-details">Message: "${customData.message}"</div>` : ''}
-              ${addonsData && Array.isArray(addonsData) && addonsData.length > 0 ? 
-                `<div class="item-details">Add-ons: ${addonsData.map((a: any) => 
-                  `${a.name}${a.quantity > 1 ? ` (${a.quantity}x)` : ''}`
-                ).join(', ')}</div>` : 
-                (customData?.addons && customData.addons.length > 0 ? 
-                  `<div class="item-details">Add-ons: ${customData.addons.map((a: any) => a.name).join(', ')}</div>` : '')}
+              <div class="item-name">${item.name}</div>
+              ${item.is_gift_wrapped ? `<div class="item-details">🎁 Gift Wrapped</div>` : ''}
+              ${item.variations ? Object.entries(item.variations).map(([key, value]) => 
+                `<div class="item-details">${key}: ${value.name}${value.price_adjustment > 0 ? ` (+₹${value.price_adjustment.toFixed(2)})` : ''}</div>`
+              ).join('') : ''}
               <div class="row">
-                <span class="item-details">${item.quantity} x ₹${item.price.toFixed(2)}</span>
-                <span>₹${(item.quantity * item.price).toFixed(2)}</span>
+                <span class="item-details">${item.quantity} x ₹${item.base_price.toFixed(2)}</span>
+                <span>₹${item.total_price.toFixed(2)}</span>
               </div>
-              ${item.special_instructions ? `<div class="item-details">Note: ${item.special_instructions}</div>` : ''}
+              ${item.special_instructions ? `<div class="item-details"><strong>Cake Name: ${item.special_instructions}</strong></div>` : ''}
             </div>
           `
         }).join('')}
@@ -1109,10 +1248,10 @@ function generateInvoiceHtml(order: Order, items: OrderItem[]): string {
             <span>₹${order.subtotal.toFixed(2)}</span>
           </div>
         ` : ''}
-        ${order.tax ? `
+        ${order.tax_amount ? `
           <div class="row">
             <span>Tax:</span>
-            <span>₹${order.tax.toFixed(2)}</span>
+            <span>₹${order.tax_amount.toFixed(2)}</span>
           </div>
         ` : ''}
         ${order.delivery_fee ? `
@@ -1121,15 +1260,15 @@ function generateInvoiceHtml(order: Order, items: OrderItem[]): string {
             <span>₹${order.delivery_fee.toFixed(2)}</span>
           </div>
         ` : ''}
-        ${order.reward_discount ? `
+        ${order.discount_amount ? `
           <div class="row">
             <span>Discount:</span>
-            <span>-₹${order.reward_discount.toFixed(2)}</span>
+            <span>-₹${order.discount_amount.toFixed(2)}</span>
           </div>
         ` : ''}
         <div class="row total-row">
           <span>TOTAL:</span>
-          <span>₹${order.total.toFixed(2)}</span>
+          <span>₹${order.total_amount.toFixed(2)}</span>
         </div>
       </div>
 

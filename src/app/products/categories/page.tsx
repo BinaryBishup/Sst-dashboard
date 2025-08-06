@@ -124,13 +124,8 @@ export default function CategoriesPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Categories</h2>
-            <p className="text-muted-foreground">
-              Organize your products into categories
-            </p>
-          </div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
           <Button onClick={handleAddCategory}>
             <Plus className="mr-2 h-4 w-4" />
             Add Category

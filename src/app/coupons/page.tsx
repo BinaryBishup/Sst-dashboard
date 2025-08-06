@@ -151,63 +151,14 @@ export default function CouponsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Coupons</h2>
-            <p className="text-muted-foreground">
-              Create and manage discount coupons
-            </p>
-          </div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Coupons</h1>
           <Button onClick={handleAddPromoCode}>
             <Plus className="mr-2 h-4 w-4" />
             Create Promo Code
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Active Promo Codes
-              </CardTitle>
-              <Percent className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{activePromoCodesCount}</div>
-              <p className="text-xs text-muted-foreground">
-                Currently active codes
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Redemptions
-              </CardTitle>
-              <Copy className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalRedemptions}</div>
-              <p className="text-xs text-muted-foreground">
-                Total code uses
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Savings
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(totalSavings)}</div>
-              <p className="text-xs text-muted-foreground">
-                Estimated customer savings
-              </p>
-            </CardContent>
-          </Card>
-        </div>
 
         <Card>
           <CardHeader>
