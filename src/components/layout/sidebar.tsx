@@ -38,7 +38,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname()
   // Temporarily disabled until Supabase is configured
   // const { systemUser, signOut } = useAuth()
-  const systemUser: { full_name?: string } | null = null
+  const systemUser: { full_name?: string } | null = null as { full_name?: string } | null
   const signOut = () => {}
 
   return (
