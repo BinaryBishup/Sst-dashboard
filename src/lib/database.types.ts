@@ -392,6 +392,52 @@ export interface Database {
       }
       
 
+      // System users table for admin authentication
+      system_users: {
+        Row: {
+          id: string
+          auth_id: string | null
+          email: string | null
+          phone: string | null
+          full_name: string
+          role: 'admin' | 'manager' | 'staff'
+          avatar_url: string | null
+          is_active: boolean
+          permissions: Json
+          last_login: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          auth_id?: string | null
+          email?: string | null
+          phone?: string | null
+          full_name: string
+          role?: 'admin' | 'manager' | 'staff'
+          avatar_url?: string | null
+          is_active?: boolean
+          permissions?: Json
+          last_login?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          auth_id?: string | null
+          email?: string | null
+          phone?: string | null
+          full_name?: string
+          role?: 'admin' | 'manager' | 'staff'
+          avatar_url?: string | null
+          is_active?: boolean
+          permissions?: Json
+          last_login?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+
       // Promo codes table (keeping the same)
       promo_codes: {
         Row: {

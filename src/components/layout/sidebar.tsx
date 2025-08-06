@@ -12,9 +12,12 @@ import {
   Truck,
   X,
   Menu,
-  Calculator
+  Calculator,
+  User,
+  LogOut
 } from "lucide-react"
 import { useState } from "react"
+import { useAuth } from "@/components/providers/AuthProvider"
 
 const navigation = [
   { name: "POS", href: "/pos", icon: Calculator },
@@ -33,6 +36,10 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname()
+  // Temporarily disabled until Supabase is configured
+  // const { systemUser, signOut } = useAuth()
+  const systemUser = null
+  const signOut = () => {}
 
   return (
     <>
@@ -97,6 +104,42 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               )
             })}
           </nav>
+          
+          {/* User Profile Section */}
+          <div className="px-4 pb-4 border-t border-gray-800">
+            <div className="pt-4 space-y-2">
+              <Link
+                href="/profile"
+                className={cn(
+                  "group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200",
+                  pathname === "/profile"
+                    ? "bg-gray-800 text-white shadow-lg"
+                    : "text-gray-300 hover:bg-gray-800 hover:text-white hover:shadow-md"
+                )}
+              >
+                <User className={cn(
+                  "mr-3 h-5 w-5 flex-shrink-0 transition-colors",
+                  pathname === "/profile" ? "text-blue-400" : "text-gray-400 group-hover:text-white"
+                )} />
+                <div className="flex flex-col">
+                  <span className="text-sm">Profile</span>
+                  {systemUser && (
+                    <span className="text-xs text-gray-500 group-hover:text-gray-400">
+                      {systemUser.full_name}
+                    </span>
+                  )}
+                </div>
+              </Link>
+              
+              <button
+                onClick={signOut}
+                className="group flex items-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 text-gray-300 hover:bg-red-900 hover:text-white hover:shadow-md"
+              >
+                <LogOut className="mr-3 h-5 w-5 flex-shrink-0 transition-colors text-gray-400 group-hover:text-white" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </>
