@@ -38,7 +38,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname()
   // Temporarily disabled until Supabase is configured
   // const { systemUser, signOut } = useAuth()
-  const systemUser = null
+  const systemUser: { full_name?: string } | null = null
   const signOut = () => {}
 
   return (
@@ -123,7 +123,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 )} />
                 <div className="flex flex-col">
                   <span className="text-sm">Profile</span>
-                  {systemUser && (
+                  {systemUser?.full_name && (
                     <span className="text-xs text-gray-500 group-hover:text-gray-400">
                       {systemUser.full_name}
                     </span>

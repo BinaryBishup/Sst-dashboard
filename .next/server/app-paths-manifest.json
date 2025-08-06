@@ -1,9 +1,0 @@
-{
-  "/auth/page": "app/auth/page.js",
-  "/page": "app/page.js",
-  "/orders/page": "app/orders/page.js",
-  "/api/orders/route": "app/api/orders/route.js",
-  "/api/delivery-partners/route": "app/api/delivery-partners/route.js",
-  "/profile/page": "app/profile/page.js",
-  "/pos/page": "app/pos/page.js"
-}
