@@ -633,6 +633,8 @@ function OrderDetailsView({
               let product = null
               let customChargeData = null
               let addonsData = null
+              let productAttributes = null
+              let combo = null
               
               try {
                 // Handle product_snapshot - it might be a string or already an object
@@ -655,28 +657,47 @@ function OrderDetailsView({
                 } else if (item.addons) {
                   addonsData = item.addons
                 }
+
+                // Handle product_attributes JSONB column
+                if (typeof item.product_attributes === 'string') {
+                  productAttributes = JSON.parse(item.product_attributes)
+                } else if (item.product_attributes) {
+                  productAttributes = item.product_attributes
+                }
+
+                // If item_type is combo, fetch combo details
+                if (item.item_type === 'combo' && item.combo_id) {
+                  // Note: You might want to fetch combo details from API
+                  combo = item.combo || null
+                }
               } catch (e) {
                 console.error('Error parsing item data:', e, item)
               }
               
+              // Determine the display name based on item type
+              const isCombo = item.item_type === 'combo'
               
               // Use product from API if available, otherwise fallback to snapshot
               const actualProduct = item.product || product
               
               // Extract product details from various possible structures
-              const productName = actualProduct?.name || 
-                               actualProduct?.product_name || 
-                               product?.name ||
-                               product?.product_name || 
-                               customChargeData?.product?.name ||
-                               customChargeData?.productName ||
-                               'Unknown Product'
+              const productName = isCombo && combo 
+                               ? (combo.name || `Combo #${item.combo_id}`)
+                               : (actualProduct?.name || 
+                                 actualProduct?.product_name || 
+                                 product?.name ||
+                                 product?.product_name || 
+                                 customChargeData?.product?.name ||
+                                 customChargeData?.productName ||
+                                 'Unknown Product')
               
-              const productImage = actualProduct?.image_url || 
-                                 actualProduct?.images?.[0] || 
-                                 product?.image_url ||
-                                 product?.images?.[0] || 
-                                 customChargeData?.product?.image_url
+              const productImage = isCombo && combo
+                                 ? (combo.image_url || combo.images?.[0])
+                                 : (actualProduct?.image_url || 
+                                   actualProduct?.images?.[0] || 
+                                   product?.image_url ||
+                                   product?.images?.[0] || 
+                                   customChargeData?.product?.image_url)
               
               return (
                 <div key={item.id} className="flex gap-4 py-3 border-b last:border-b-0">
@@ -692,6 +713,12 @@ function OrderDetailsView({
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{productName}</span>
+                      {/* Item Type Badge */}
+                      {isCombo && (
+                        <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                          🎯 Combo
+                        </Badge>
+                      )}
                       {/* Gift Wrap Badge */}
                       {item.gift_wrap === true && (
                         <Badge className="bg-pink-100 text-pink-800 border-pink-200">
@@ -700,28 +727,67 @@ function OrderDetailsView({
                       )}
                     </div>
                     
-                    {/* Show product type */}
-                    {product?.type && (
+                    {/* Show product type if not already shown */}
+                    {item.item_type && item.item_type !== 'product' && !isCombo && (
                       <div className="text-xs text-muted-foreground">
-                        Type: {product.type}
+                        Type: {item.item_type}
+                      </div>
+                    )}
+
+                    {/* Show product attributes (size, flavor, toppings, etc.) */}
+                    {productAttributes && Object.keys(productAttributes).length > 0 && (
+                      <div className="bg-gray-50 rounded-md p-2 mt-2">
+                        <div className="text-xs font-semibold text-gray-700 mb-1">Customizations:</div>
+                        {Object.entries(productAttributes).map(([key, value]: [string, any]) => {
+                          if (Array.isArray(value) && value.length > 0) {
+                            return (
+                              <div key={key} className="text-xs text-gray-600 ml-2">
+                                <span className="font-medium capitalize">{key}:</span>
+                                {value.map((item: any, idx: number) => (
+                                  <span key={idx} className="ml-1">
+                                    {item.name}
+                                    {item.price_adjustment && item.price_adjustment > 0 && (
+                                      <span className="text-green-600"> (+{formatCurrency(item.price_adjustment)})</span>
+                                    )}
+                                    {item.price && (
+                                      <span className="text-green-600"> (+{formatCurrency(item.price)})</span>
+                                    )}
+                                    {idx < value.length - 1 && ', '}
+                                  </span>
+                                ))}
+                              </div>
+                            )
+                          } else if (typeof value === 'string' || typeof value === 'number') {
+                            return (
+                              <div key={key} className="text-xs text-gray-600 ml-2">
+                                <span className="font-medium capitalize">{key}:</span> {value}
+                              </div>
+                            )
+                          }
+                          return null
+                        })}
                       </div>
                     )}
                     
                     {/* Show message if it's a product with message */}
                     {product?.message && customChargeData?.message && (
-                      <div className="text-sm text-blue-600 mt-1">
-                        Message: "{customChargeData.message}"
+                      <div className="bg-blue-50 rounded-md p-2 mt-2">
+                        <div className="text-sm text-blue-800 font-medium">
+                          💌 Message: "{customChargeData.message}"
+                        </div>
                       </div>
                     )}
                     
                     {/* Show addons from new column */}
                     {addonsData && Array.isArray(addonsData) && addonsData.length > 0 && (
-                      <div className="text-sm text-gray-600 mt-1">
+                      <div className="text-sm text-gray-600 mt-2">
                         <span className="font-medium">Add-ons:</span>
                         <div className="ml-4 text-xs space-y-1">
                           {addonsData.map((addon: any, idx: number) => (
                             <div key={idx}>
-                              • {addon.name} {addon.quantity > 1 ? `(${addon.quantity}x)` : ''} - {formatCurrency(addon.price * (addon.quantity || 1))}
+                              • {addon.name || `Addon ID: ${addon}`} 
+                              {addon.quantity && addon.quantity > 1 ? ` (${addon.quantity}x)` : ''} 
+                              {addon.price && ` - ${formatCurrency(addon.price * (addon.quantity || 1))}`}
                             </div>
                           ))}
                         </div>
@@ -730,12 +796,15 @@ function OrderDetailsView({
                     
                     {/* Show addons from custom charge data if new column is empty */}
                     {!addonsData && customChargeData?.addons && customChargeData.addons.length > 0 && (
-                      <div className="text-sm text-gray-600 mt-1">
-                        Add-ons: {customChargeData.addons.map((addon: any) => addon.name).join(', ')}
+                      <div className="text-sm text-gray-600 mt-2">
+                        <span className="font-medium">Add-ons:</span>
+                        <div className="ml-4 text-xs">
+                          {customChargeData.addons.map((addon: any) => addon.name).join(', ')}
+                        </div>
                       </div>
                     )}
                     
-                    <div className="text-sm text-muted-foreground mt-1">
+                    <div className="text-sm text-muted-foreground mt-2">
                       Quantity: {item.quantity} × {formatCurrency(item.price)}
                       {item.gift_wrap && (
                         <span className="ml-2 text-pink-600 font-medium">
@@ -744,9 +813,15 @@ function OrderDetailsView({
                       )}
                     </div>
                     
+                    {/* Highlighted special instructions/notes */}
                     {item.special_instructions && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Note: {item.special_instructions}
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-2 mt-2">
+                        <div className="text-sm font-medium text-yellow-900">
+                          📝 Special Instructions:
+                        </div>
+                        <div className="text-sm text-yellow-800 mt-1">
+                          {item.special_instructions}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -794,6 +869,70 @@ function OrderDetailsView({
           </div>
         </CardContent>
       </Card>
+
+      {/* Order-level Special Instructions and Addons */}
+      {(order.special_instructions || (order.addons && Object.keys(order.addons).length > 0)) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Order Notes & Extras</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Order Special Instructions */}
+            {order.special_instructions && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-2 w-2 bg-amber-500 rounded-full animate-pulse"></div>
+                  <span className="font-semibold text-amber-900">Special Instructions</span>
+                </div>
+                <div className="text-amber-800 text-sm leading-relaxed">
+                  {order.special_instructions}
+                </div>
+              </div>
+            )}
+
+            {/* Order-level Addons */}
+            {order.addons && (() => {
+              let orderAddons = null
+              try {
+                orderAddons = typeof order.addons === 'string' 
+                  ? JSON.parse(order.addons) 
+                  : order.addons
+              } catch (e) {
+                console.error('Error parsing order addons:', e)
+              }
+              
+              if (orderAddons && Array.isArray(orderAddons) && orderAddons.length > 0) {
+                return (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                      <span className="font-semibold text-blue-900">Order Add-ons</span>
+                    </div>
+                    <div className="space-y-2">
+                      {orderAddons.map((addon: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <span className="text-blue-800">
+                            {addon.name || `Addon ID: ${addon}`}
+                            {addon.quantity && addon.quantity > 1 && (
+                              <span className="text-blue-600"> × {addon.quantity}</span>
+                            )}
+                          </span>
+                          {addon.price && (
+                            <span className="font-medium text-blue-900">
+                              {formatCurrency(addon.price * (addon.quantity || 1))}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              }
+              return null
+            })()}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

@@ -216,6 +216,7 @@ export interface Database {
           estimated_delivery_time: string | null
           created_at: string | null
           updated_at: string | null
+          addons: Json | null
         }
         Insert: {
           id?: string
@@ -241,6 +242,7 @@ export interface Database {
           estimated_delivery_time?: string | null
           created_at?: string | null
           updated_at?: string | null
+          addons?: Json | null
         }
         Update: {
           id?: string
@@ -266,6 +268,7 @@ export interface Database {
           estimated_delivery_time?: string | null
           created_at?: string | null
           updated_at?: string | null
+          addons?: Json | null
         }
       }
 
@@ -283,6 +286,9 @@ export interface Database {
           gift_wrap: boolean | null
           addons: Json | null
           product_id: string | null
+          item_type: string | null
+          combo_id: string | null
+          product_attributes: Json | null
         }
         Insert: {
           id?: string
@@ -296,6 +302,9 @@ export interface Database {
           gift_wrap?: boolean | null
           addons?: Json | null
           product_id?: string | null
+          item_type?: string | null
+          combo_id?: string | null
+          product_attributes?: Json | null
         }
         Update: {
           id?: string
@@ -309,6 +318,9 @@ export interface Database {
           gift_wrap?: boolean | null
           addons?: Json | null
           product_id?: string | null
+          item_type?: string | null
+          combo_id?: string | null
+          product_attributes?: Json | null
         }
       }
       

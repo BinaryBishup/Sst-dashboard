@@ -34,9 +34,14 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch order items' }, { status: 500 })
     }
 
-    // Get product IDs to fetch product details
+    // Get product IDs and combo IDs to fetch details
     const productIds = orderItems
       ?.map(item => item.product_id)
+      .filter(Boolean)
+      .filter((value, index, self) => self.indexOf(value) === index) // unique IDs
+
+    const comboIds = orderItems
+      ?.map(item => item.combo_id)
       .filter(Boolean)
       .filter((value, index, self) => self.indexOf(value) === index) // unique IDs
 
@@ -51,10 +56,22 @@ export async function GET(
       products = productData || []
     }
 
-    // Map products to order items
+    // Fetch combos if there are combo IDs
+    let combos: any[] = []
+    if (comboIds && comboIds.length > 0) {
+      const { data: comboData } = await supabaseAdmin
+        .from('combos')
+        .select('id, name, description, image_url, images')
+        .in('id', comboIds)
+      
+      combos = comboData || []
+    }
+
+    // Map products and combos to order items
     const enrichedOrderItems = orderItems?.map(item => ({
       ...item,
-      product: products.find(p => p.id === item.product_id) || null
+      product: products.find(p => p.id === item.product_id) || null,
+      combo: combos.find(c => c.id === item.combo_id) || null
     })) || []
 
     // Fetch related profile if user_id exists
