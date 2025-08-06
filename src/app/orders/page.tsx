@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -143,7 +143,7 @@ const deliveryInstructions = [
   { key: 'leave-with-guard', label: 'Leave With Guard', icon: User }
 ]
 
-export default function OrdersPage() {
+function OrdersContent() {
   const [orders, setOrders] = useState<Order[]>([])
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -1300,4 +1300,18 @@ function generateInvoiceHtml(order: Order): string {
     </body>
     </html>
   `
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    }>
+      <OrdersContent />
+    </Suspense>
+  )
 }

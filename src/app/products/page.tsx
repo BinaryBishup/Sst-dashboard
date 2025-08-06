@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -74,7 +74,7 @@ const productTypes = [
   { value: 'addon', label: 'Add-ons', icon: Settings, emoji: '⚡' }
 ]
 
-export default function ProductsPage() {
+function ProductsContent() {
   const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
@@ -505,5 +505,19 @@ export default function ProductsPage() {
         onSuccess={handleModalSuccess}
       />
     </DashboardLayout>
+  )
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <div className="flex items-center justify-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </DashboardLayout>
+    }>
+      <ProductsContent />
+    </Suspense>
   )
 }
